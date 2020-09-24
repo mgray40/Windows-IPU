@@ -2,13 +2,14 @@
 
 #outdatedOS list, used to check against multiple old build ID's at once
 #UPDATE AS NEEDED IN FORMAT "10.0 (XXXXX)"
-$script:OutOfDateOS = ("10.0 (16299)", "10.0 (17134)")
+$script:OutOfDateOS = ("10.0 (16299)", "10.0 (17134)", "10.0 (17763)" , "10.0 (18362)")
 #UpdatedOS list, used to check against multiple "acceptable" build ID's at once 
 #UPDATE AS NEEDED IN FORMAT "10.0 (XXXXX)"
 $script:UpdatedOS = ("10.0 (18363)", "10.0 (19041)")
 $script:compArray = @()
 $script:1709_Count = 0
 $script:1803_Count = 0
+$script:1903_Count = 0
 $script:LCM_Count = 0
 $script:No_AD_Count = 0
 $script:Updated_Count = 0
@@ -69,6 +70,10 @@ Function Get-BuildID()
             if ($CompObj.OSBuildID -in $OutOfDateOS)
             {
                 $script:Outdated_Count++
+                if($null -eq $CompObj.Flag) 
+                {
+                    $CompObj.Flag = "Outdated"
+                }
             }
 
             $script:CompArray = $script:CompArray + $CompObj
@@ -79,6 +84,7 @@ Function Get-BuildID()
             $CompObj.Name = $computer.'Name' #if not in AD just assign the name from input file to object
             $CompObj.OSBuildID = "N/A"
             $CompObj.Task = $computer.'TASK'
+            $CompObj.Flag = $computer.'Flag'
             $script:CompArray = $script:CompArray + $CompObj
         }
 
@@ -87,6 +93,8 @@ Function Get-BuildID()
     }
 
     Get-Counts
+
+    
 }
 
 Function Get-Counts()
@@ -99,6 +107,7 @@ Function Get-Counts()
     #The two below are current project. Can be removed or used as template for future project
     $script:1709_Count = ($script:compArray | Where-Object {$_.OSBuildID -like "10.0 (16299)"}).Count
     $script:1803_Count = ($script:compArray | Where-Object {$_.OSBuildID -like "10.0 (17134)"}).Count
+    $script:1903_Count = ($script:compArray | Where-Object {$_.OSBuildID -like "10.0 (18362)"}).Count
 }
 Function DisplayToConsole()
 {
@@ -123,6 +132,11 @@ Function DisplayToConsole()
     #" `n Machines on 1803"
     #write-output $script:compArray | Where-Object OSBuildID -like "10.0 (17134)" | Format-Table -AutoSize
 
+    #1903 output
+    "`nNumber of Machines on 1903: " + $1903_Count
+    #" `n Machines on 1903"
+    #write-output $script:compArray | Where-Object OSBuildID -like "10.0 (18362)" | Format-Table -AutoSize
+
     #LCM and Missing from AD
     "`nMachines Replaced by LCM: " + $script:LCM_Count
     #write-output $script:compArray | Where-Object OSBuildID -like "LCM" | Format-Table -AutoSize
@@ -130,50 +144,102 @@ Function DisplayToConsole()
     "`nMachines not Found in AD: " + $script:No_AD_Count
     #write-output $script:compArray | Where-Object OSBuildID -like "N/A" | Format-Table -AutoSize
 
-    
-
     "`nPercent of machines completed: " + [math]::truncate($script:Percent) +'%'
 }
 
 Function ExportReport()
 {
-    #enter code here
+    #Remove-Item "C:\Users\mgray40\desktop\IPU Report $(Get-date -f yyyy-MM-dd).xlsx"
+    #create excel file
     $xlfile = "C:\Users\mgray40\desktop\IPU Report $(Get-date -f yyyy-MM-dd).xlsx"
-    #$xlfile = "$env:TEMP\Report $(Get-date -f yyyy-MM-dd).xlsx"
-    #Remove-Item $xlfile -ErrorAction SilentlyContinue
 
-    Get-Date | Export-Excel $xlfile -AutoSize -WorksheetName Summary -startrow 2
-    "Machines Updated: " + ($script:Updated_Count + $script:LCM_Count + $script:No_AD_Count) | Export-Excel $xlfile -AutoSize -WorksheetName Summary -startrow 3
-    "Percent of machines completed: " + [math]::truncate($script:Percent) +'%' | Export-Excel $xlfile -AutoSize -WorksheetName Summary -startrow 4
-    "Machines Needing Updates: " + $script:Outdated_Count  | Export-Excel $xlfile -AutoSize -WorksheetName Summary -startrow 5
-    "Number of Machines on 1709: " + $1709_Count | Export-Excel $xlfile -AutoSize -WorksheetName Summary -startrow 6
-    "Number of Machines on 1803: " + $1803_Count | Export-Excel $xlfile -AutoSize -WorksheetName Summary -startrow 7
-    "Number of Machines on Hold: " + ($script:compArray | Where-Object {$_.Flag -like "true"}).Count | Export-Excel $xlfile -AutoSize -WorksheetName Summary -startrow 8
-    $Sheet1 = "Windows IPU Report" | Export-Excel $xlfile -AutoSize -WorksheetName Summary -startrow 1 -PassThru
-    $ws = $Sheet1.Workbook.Worksheets['Summary']
+    foreach ($comp in $script:CompArray) {
+        if ($comp.OSBuildID -like "10.0 (16299)")
+        {
+            $comp.OSBuildID = "1709"
+        }
+        elseif ($comp.OSBuildID -like "10.0 (17134)")
+        {
+            $comp.OSBuildID = "1803"
+        }
+        elseif ($comp.OSBuildID -like "10.0 (17763)")
+        {
+            $comp.OSBuildID = "1809"
+        }
+        elseif ($comp.OSBuildID -like "10.0 (18362)")
+        {
+            $comp.OSBuildID = "1903"
+        }
+        elseif ($comp.OSBuildID -like "10.0 (18363)")
+        {
+            $comp.OSBuildID = "1909"
+        }
+        elseif ($comp.OSBuildID -like "10.0 (19041)")
+        {
+            $comp.OSBuildID = "2004"
+        }
+    }
+    
+    #write placeholder data, this will get overwritten. It's just to create the first worksheet
+    "placeholder" | Export-Excel $xlfile -AutoSize -WorksheetName Summary -startrow 1 #-PassThru
+    
+    $Sheet2 =  $script:compArray | Where-Object OSBuildID -like "1709" | Export-Excel $xlfile -AutoSize -WorksheetName 1709 -Numberformat 'Text' -NoNumberConversion * -startrow 1 -TableName Comp1709 -PassThru
+    Close-ExcelPackage $Sheet2 
+
+    $Sheet3 =  $script:compArray | Where-Object OSBuildID -like "1803" | Export-Excel $xlfile -AutoSize -WorksheetName 1803 -Numberformat 'Text' -NoNumberConversion * -startrow 1 -TableName Comp1803 -PassThru
+    Close-ExcelPackage $Sheet3 
+
+    $Sheet4 =  $script:compArray | Where-Object OSBuildID -like "1903" | Export-Excel $xlfile -AutoSize -WorksheetName 1903 -Numberformat 'Text' -NoNumberConversion * -startrow 1 -TableName Comp1903 -PassThru
+    Close-ExcelPackage $Sheet4 
+
+    $Sheet5 =  $script:compArray | Where-Object OSBuildID -like "LCM" | Export-Excel $xlfile -AutoSize -WorksheetName LCM -Numberformat 'Text' -NoNumberConversion * -startrow 1 -TableName CompLCM -PassThru
+    Close-ExcelPackage $Sheet5 
+
+    $Sheet6 =  $script:compArray | Where-Object OSBuildID -like "N/A" | Export-Excel $xlfile -AutoSize -WorksheetName Not_in_AD -Numberformat 'Text' -NoNumberConversion * -startrow 1 -TableName CompAD -PassThru
+    Close-ExcelPackage $Sheet6 
+
+    $Sheet7 =  $script:compArray | Where-Object Flag -like "Enrollment" | Export-Excel $xlfile -AutoSize -WorksheetName Enrollment -Numberformat 'Text' -NoNumberConversion * -startrow 1 -TableName CompHold -PassThru
+    Close-ExcelPackage $Sheet7 #-Show
+
+    $Sheet8 =  $script:compArray | Export-Excel $xlfile -AutoSize -WorksheetName Master -NoNumberConversion * -startrow 1 -TableName MasterTable -PassThru #-IncludePivottable  -PivotRows OSBuildID -PivotData @{"OSBuildID"="COUNT"} -PivotColumns Flag #-IncludePivotChart -PivotChartType Pie -ShowPercent
+    
+    Close-ExcelPackage $Sheet8 
+    
+    $Sheet1 ="Machines Updated: " + ($script:Updated_Count + $script:LCM_Count + $script:No_AD_Count) | Export-Excel $xlfile -AutoSize -WorksheetName Summary -startrow 3
+    $Sheet1 ="Percent of machines completed: " + [math]::truncate($script:Percent) +'%' | Export-Excel $xlfile -AutoSize -WorksheetName Summary -startrow 4
+    $Sheet1 ="Machines Needing Updates: " + $script:Outdated_Count  | Export-Excel $xlfile -AutoSize -WorksheetName Summary -startrow 5
+    $Sheet1 ="Number of Machines on 1709: " + $1709_Count | Export-Excel $xlfile -AutoSize -WorksheetName Summary -startrow 6
+    $Sheet1 ="Number of Machines on 1803: " + $1803_Count | Export-Excel $xlfile -AutoSize -WorksheetName Summary -startrow 7
+    $Sheet1 ="Number of Machines on 1903: " + $1903_Count | Export-Excel $xlfile -AutoSize -WorksheetName Summary -startrow 8
+    #$Sheet1 ="Number of Machines on Hold: " + ($script:compArray | Where-Object {$_.Flag -like "true"}).Count | Export-Excel $xlfile -AutoSize -WorksheetName Summary -startrow 9
+    $Sheet1 = Get-Date | Export-Excel $xlfile -AutoSize -WorksheetName Summary -startrow 2 -PassThru
+    $ws = $sheet1.workbook.worksheets['Summary']
     $formatType1 = @{WorkSheet=$ws;Bold=$true;FontSize=18;}
     Set-Format -Range A1 -Value "Windows IPU Report" @formatType1
 
+    #adds rules for pivot table 
+    $pivotTableParams = @{
+        PivotTableName  = "TestTable"
+        Address         = $sheet1.Summary.cells["C1"]
+        SourceWorkSheet = $sheet1.Master
+        PivotRows       = @("OSBuildID")
+        PivotData       = @{"OSBuildID"="COUNT"}
+        PivotColumns    = @("Flag")
+        
+        PivotChartDefinition =@{
+            Title="IPU Pivot Chart"
+            ChartType = 'ColumnStacked'
+            Column = 9
+        }        
+    }
+    #declares pivot table
+    Add-PivotTable @pivotTableParams -PassThru
+
+    #writes new format over range A1:8
     $formatType2 = @{WorkSheet=$ws;AutoSize=$true}
-    Set-Format -Range A  @formatType2
+    Set-Format -Range A1:A8  @formatType2
 
-    Close-ExcelPackage $Sheet1 
-    
-    $Sheet2 =  $script:compArray | Where-Object OSBuildID -like "10.0 (16299)" | Export-Excel $xlfile -AutoSize -WorksheetName 1709 -Numberformat 'Text' -NoNumberConversion * -startrow 1 -TableName Comp1709 -PassThru
-    Close-ExcelPackage $Sheet2 
-
-    $Sheet3 =  $script:compArray | Where-Object OSBuildID -like "10.0 (17134)" | Export-Excel $xlfile -AutoSize -WorksheetName 1803 -Numberformat 'Text' -NoNumberConversion * -startrow 1 -TableName Comp1803 -PassThru
-    Close-ExcelPackage $Sheet3 
-
-    $Sheet4 =  $script:compArray | Where-Object OSBuildID -like "LCM" | Export-Excel $xlfile -AutoSize -WorksheetName LCM -Numberformat 'Text' -NoNumberConversion * -startrow 1 -TableName CompLCM -PassThru
-    Close-ExcelPackage $Sheet4 
-
-    $Sheet5 =  $script:compArray | Where-Object OSBuildID -like "N/A" | Export-Excel $xlfile -AutoSize -WorksheetName Not_in_AD -Numberformat 'Text' -NoNumberConversion * -startrow 1 -TableName CompAD -PassThru
-    Close-ExcelPackage $Sheet5 
-
-    $Sheet6 =  $script:compArray | Where-Object Flag -like "true" | Export-Excel $xlfile -AutoSize -WorksheetName Enrollment -Numberformat 'Text' -NoNumberConversion * -startrow 1 -TableName CompHold -PassThru
-    Close-ExcelPackage $Sheet6 #-Show
-
+    Close-ExcelPackage $Sheet1 #-Show
     #Call email function to send report to supervisors
     EmailReport
 }
